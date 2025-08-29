@@ -26,11 +26,6 @@ class ReviewController extends Controller
             $query->where('guide_id', $request->guide_id);
         }
 
-        // Filter by user if provided
-        if ($request->has('user_id')) {
-            $query->where('user_id', $request->user_id);
-        }
-
         // Filter by rating if provided
         if ($request->has('rating')) {
             $query->where('rating', $request->rating);
@@ -64,35 +59,16 @@ class ReviewController extends Controller
             ], 422);
         }
 
-        // Must review either a site or a guide, not both or neither
-        if ((!$request->site_id && !$request->guide_id) || ($request->site_id && $request->guide_id)) {
+        // Make sure at least site_id or guide_id is provided
+        if (!$request->site_id && !$request->guide_id) {
             return response()->json([
                 'success' => false,
-                'message' => 'You must review either a site or a guide, not both'
-            ], 422);
-        }
-
-        // Check if user already reviewed this site/guide
-        $existingReview = Review::where('user_id', $request->user()->id)
-            ->where(function($query) use ($request) {
-                if ($request->site_id) {
-                    $query->where('site_id', $request->site_id);
-                }
-                if ($request->guide_id) {
-                    $query->where('guide_id', $request->guide_id);
-                }
-            })
-            ->first();
-
-        if ($existingReview) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You have already reviewed this item'
+                'message' => 'Either site_id or guide_id must be provided'
             ], 422);
         }
 
         $review = Review::create([
-            'user_id' => $request->user()->id,
+            'user_id' => auth()->id(),
             'site_id' => $request->site_id,
             'guide_id' => $request->guide_id,
             'rating' => $request->rating,
@@ -142,11 +118,11 @@ class ReviewController extends Controller
             ], 404);
         }
 
-        // Check if the user owns this review
-        if ($review->user_id !== $request->user()->id) {
+        // Check if user owns this review
+        if ($review->user_id !== auth()->id()) {
             return response()->json([
                 'success' => false,
-                'message' => 'You can only update your own reviews'
+                'message' => 'Unauthorized to update this review'
             ], 403);
         }
 
@@ -187,13 +163,11 @@ class ReviewController extends Controller
             ], 404);
         }
 
-        $request = request();
-        
-        // Check if the user owns this review or is an admin
-        if ($review->user_id !== $request->user()->id && $request->user()->role !== 'admin') {
+        // Check if user owns this review or is admin
+        if ($review->user_id !== auth()->id() && auth()->user()->role !== 'admin') {
             return response()->json([
                 'success' => false,
-                'message' => 'You can only delete your own reviews'
+                'message' => 'Unauthorized to delete this review'
             ], 403);
         }
 
